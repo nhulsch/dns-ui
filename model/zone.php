@@ -134,7 +134,6 @@ class Zone extends Record {
 			$change_record->type = $rrset->type;
 			$change_record->content = $record->content;
 			$change_record->disabled = $record->disabled;
-			$change_record->{'set-ptr'} = $record->{'set-ptr'};
 			$change->records[] = $change_record;
 		}
 		$change->comments = array();
@@ -733,12 +732,6 @@ class Zone extends Record {
 		}
 		if(($update->type == 'SOA' || $update->type == 'NS') && !$active_user->admin) return;
 
-		if(isset($config['dns']['autocreate_reverse_records'])) {
-			$autocreate_ptr = (bool)$config['dns']['autocreate_reverse_records'];
-		} else {
-			$autocreate_ptr = true; # enabled by default
-		}
-
 		switch($update->action) {
 		case 'add':
 			if(!isset($update->records) || !is_array($update->records)) throw new BadData('Malformed action');
@@ -757,11 +750,6 @@ class Zone extends Record {
 				$rr = new ResourceRecord;
 				$rr->content = $record->content;
 				$rr->disabled = ($record->enabled === 'No' || $record->enabled === false);
-				if(!$autocreate_ptr || $rr->disabled) {
-					$rr->{'set-ptr'} = false;
-				} else {
-					$rr->{'set-ptr'} = $zone_dir->check_reverse_record_zone($rrset->name, $rrset->type, $rr->content, $revs_missing, $revs_updated);
-				}
 				$rrset->add_resource_record($rr);
 			}
 			if(isset($update->comment)) {
@@ -796,11 +784,6 @@ class Zone extends Record {
 				$rr = new ResourceRecord;
 				$rr->content = $record->content;
 				$rr->disabled = ($record->enabled === 'No' || $record->enabled === false);
-				if(!$autocreate_ptr || $rr->disabled) {
-					$rr->{'set-ptr'} = false;
-				} else {
-					$rr->{'set-ptr'} = $zone_dir->check_reverse_record_zone($rrset->name, $rrset->type, $rr->content, $revs_missing, $revs_updated);
-				}
 				$rrset->add_resource_record($rr);
 			}
 			if(isset($update->comment) && $update->comment != $rrset->merge_comment_text()) {

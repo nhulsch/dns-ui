@@ -225,67 +225,6 @@ class ZoneDirectory extends DBDirectory {
 	}
 
 	/**
-	* Check the list of zones to see if a suitable reverse zone exists for the forward record.
-	* @param string $name of DNS record
-	* @param string $type of DNS record
-	* @param string $address that DNS record points to
-	* @param array $revs_missing keep track of reverse zones that are missing
-	* @param array $revs_updated keep track of reverse zones that will be updated
-	*/
-	public function check_reverse_record_zone($name, $type, $address, &$revs_missing, &$revs_notify) {
-		global $zone_dir, $active_user;
-
-		if($type == 'A') {
-			$reverse_address = implode('.', array_reverse(explode('.', $address))).'.in-addr.arpa.';
-		} elseif($type == 'AAAA') {
-			$address = ipv6_address_expand($address);
-			$reverse_address = implode('.', array_reverse(str_split(str_replace(':', '', $address)))).'.ip6.arpa.';
-		} else {
-			return false;
-		}
-		$reverse_zone_name = $reverse_address;
-		// Find an appropriate reverse zone by starting with the full domain name, and
-		// removing subdomains until we find a match or run out of things to remove
-		do {
-			try {
-				$reverse_zone = $zone_dir->get_zone_by_name($reverse_zone_name);
-				// See if a record already exists for this IP
-				foreach($reverse_zone->list_resource_record_sets() as $rrset) {
-					if($rrset->name == $reverse_address) {
-						if($rrset->type == 'PTR') {
-							$alert = new UserAlert;
-							$alert->escaping = ESC_NONE;
-							$alert->content = 'Reverse record already exists for '.hesc($address).' in <a href="'.rrurl('/zones/'.urlencode(DNSZoneName::unqualify($reverse_zone->name))).'" class="alert-link">'.hesc(DNSZoneName::unqualify($reverse_zone->name)).'</a>. Not modifying existing PTR record from '.$rrset->merge_content_text().' to '.$name;
-							$alert->class = 'warning';
-							$active_user->add_alert($alert);
-							return false;
-						}
-						if($rrset->type == 'CNAME') {
-							$rr = reset($rrset->list_resource_records());
-							$alert = new UserAlert;
-							$alert->escaping = ESC_NONE;
-							$alert->content = 'Reverse record delegated to '.hesc($rr->content).' for '.hesc($address).' in <a href="'.rrurl('/zones/'.urlencode(DNSZoneName::unqualify($reverse_zone->name))).'" class="alert-link">'.hesc(DNSZoneName::unqualify($reverse_zone->name)).'</a>. Not creating PTR record for '.$name;
-							$alert->class = 'warning';
-							$active_user->add_alert($alert);
-							return false;
-						}
-					}
-				}
-				// Add reverse zone to list of zones to send a notify for
-				$revs_notify[$reverse_zone->pdns_id] = $reverse_zone;
-				return true;
-			} catch(ZoneNotFound $e) {
-			}
-		} while($this->remove_subdomain($reverse_zone_name));
-		$alert = new UserAlert;
-		$alert->content = "No suitable reverse zone could be found to place record for $address pointing to $name";
-		$alert->class = 'warning';
-		$active_user->add_alert($alert);
-		$revs_missing[$type][] = array('name' => $name, 'address' => $address);
-		return false;
-	}
-
-	/**
 	* Given a DNS name, remove the bottom-level subdomain from it.
 	* @param string $address DNS name
 	* @return bool true if any subdomain could be removed
